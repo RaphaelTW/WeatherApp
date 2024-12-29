@@ -1,109 +1,199 @@
-import { StyleSheet, Image, Platform } from 'react-native';
-
-import { Collapsible } from '@/components/Collapsible';
-import { ExternalLink } from '@/components/ExternalLink';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, ScrollView, View, ActivityIndicator } from 'react-native';
+import * as Location from 'expo-location';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { IconSymbol } from '@/components/ui/IconSymbol';
+import Animated, { Easing, FadeIn, SlideInLeft } from 'react-native-reanimated'; // Usando animações do reanimated
+
+interface WeatherData {
+  current: {
+    temp: number;
+    humidity: number;
+    weather: { description: string }[];
+  };
+  daily: {
+    temp: { min: number; max: number };
+    weather: { description: string }[];
+    sunrise: number;
+    sunset: number;
+    moonrise: number;
+    moonset: number;
+  }[];
+}
+
+const API_KEY = 'fb5dabe48ffbfd75aaf5e01cc720e335';
+const BASE_URL = 'https://api.openweathermap.org/data/2.5';
 
 export default function TabTwoScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Explore</ThemedText>
+  const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+
+  useEffect(() => {
+    const getLocation = async () => {
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.error('Permissão para acessar localização negada');
+          return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({});
+        setLatitude(location.coords.latitude);
+        setLongitude(location.coords.longitude);
+      } catch (error) {
+        console.error('Erro ao obter a localização:', error);
+      }
+    };
+
+    getLocation();
+  }, []);
+
+  useEffect(() => {
+    if (latitude !== null && longitude !== null) {
+      const fetchWeather = async () => {
+        try {
+          setLoading(true);
+          const response = await fetch(
+            `https://api.openweathermap.org/data/2.5/weather?q=London&units=metric&appid=fb5dabe48ffbfd75aaf5e01cc720e335`
+          );
+
+          const data = await response.json();
+          console.log('Dados recebidos:', data);
+
+          if (data && data.main) {
+            setWeatherData({
+              current: {
+                temp: data.main.temp,
+                humidity: data.main.humidity,
+                weather: data.weather,
+              },
+              daily: [],
+            });
+          } else {
+            console.error('Dados climáticos inválidos');
+          }
+        } catch (error) {
+          console.error('Erro ao buscar dados climáticos:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchWeather();
+    }
+  }, [latitude, longitude]);
+
+  const fetchWeather = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `${BASE_URL}/onecall?lat=${latitude}&lon=${longitude}&exclude=minutely,hourly,alerts&units=metric&appid=${API_KEY}`
+      );
+
+      const data = await response.json();
+      console.log('Dados recebidos:', data);
+
+      if (data && data.daily) {
+        setWeatherData(data);
+      } else {
+        console.error('Dados climáticos inválidos');
+      }
+    } catch (error) {
+      console.error('Erro ao buscar dados climáticos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <ThemedView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#150791" />
+        <ThemedText>Carregando dados climáticos...</ThemedText>
       </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
+    );
+  }
+
+  if (!weatherData || !weatherData.daily) {
+    return (
+      <ThemedView style={styles.loadingContainer}>
+        <ThemedText>Erro ao carregar dados climáticos</ThemedText>
+      </ThemedView>
+    );
+  }
+
+  const dailyData = weatherData.daily.slice(1, 7); // Próximos 6 dias
+
+  return (
+    <ScrollView style={styles.container}>
+      <Animated.View
+        style={styles.titleContainer}
+        entering={FadeIn} // Usando FadeIn para animação de entrada
+      >
+        <ThemedText type="title">Explore</ThemedText>
+      </Animated.View>
+
+      <Animated.View entering={SlideInLeft} style={styles.subtitleContainer}>
+        <ThemedText style={styles.subtitle}>
+          Temperatura Atual: {Math.round(weatherData.current.temp)}°C
         </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
+        <ThemedText style={styles.subtitle}>
+          Umidade: {weatherData.current.humidity}%
         </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
+        <ThemedText style={styles.subtitle}>
+          Condição: {weatherData.current.weather[0].description}
         </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image source={require('@/assets/images/react-logo.png')} style={{ alignSelf: 'center' }} />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Custom fonts">
-        <ThemedText>
-          Open <ThemedText type="defaultSemiBold">app/_layout.tsx</ThemedText> to see how to load{' '}
-          <ThemedText style={{ fontFamily: 'SpaceMono' }}>
-            custom fonts such as this one.
-          </ThemedText>
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/versions/latest/sdk/font">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user's current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful <ThemedText type="defaultSemiBold">react-native-reanimated</ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
+      </Animated.View>
+
+      <Animated.View style={styles.forecastContainer}>
+        {dailyData.map((day, index) => (
+          <Animated.View
+            key={index}
+            style={styles.forecastItem}
+            entering={SlideInLeft} // Animação de entrada para cada item
+          >
             <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
+              Dia {index + 1}: Min {Math.round(day.temp.min)}°C, Max{' '}
+              {Math.round(day.temp.max)}°C, {day.weather[0].description}
             </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+          </Animated.View>
+        ))}
+      </Animated.View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: '#140E50',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#140E50',
   },
   titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
+    marginBottom: 16,
+  },
+  subtitleContainer: {
+    marginBottom: 16,
+  },
+  subtitle: {
+    marginBottom: 8,
+    color: '#fff',
+  },
+  forecastContainer: {
+    marginVertical: 16,
+  },
+  forecastItem: {
+    marginBottom: 8,
+    backgroundColor: '#150791',
+    padding: 12,
+    borderRadius: 8,
   },
 });

@@ -11,8 +11,8 @@ import {
   Image,
 } from 'react-native';
 import axios from 'axios';
+import * as Location from 'expo-location';
 
-// Definindo os tipos das respostas da API
 interface WeatherMain {
   temp: number;
 }
@@ -26,19 +26,31 @@ interface WeatherData {
   name: string;
   main: WeatherMain;
   weather: WeatherDescription[];
+  sys: {
+    country: string;
+    state: string;
+  };
+}
+
+interface LocationObject {
+  coords: {
+    latitude: number;
+    longitude: number;
+  };
 }
 
 export default function WeatherApp() {
-  const [city, setCity] = useState('São Paulo');
+  const [city, setCity] = useState('');
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [location, setLocation] = useState<LocationObject | null>(null);
   const [opacity] = useState(new Animated.Value(0));
   const [rotation] = useState(new Animated.Value(0));
 
-  const API_KEY = 'fb5dabe48ffbfd75aaf5e01cc720e335';
+  const API_KEY = 'fb5dabe48ffbfd75aaf5e01cc720e335'; // Substitua pela sua chave da API do OpenWeather
 
-  const fetchWeather = async () => {
+  const fetchWeather = async (city: string) => {
     setLoading(true);
     setError('');
     try {
@@ -53,8 +65,26 @@ export default function WeatherApp() {
     }
   };
 
+  const getLocation = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      setError('Permissão para acessar a localização negada');
+      return;
+    }
+
+    const location = await Location.getCurrentPositionAsync({});
+    setLocation(location);
+
+    const { latitude, longitude } = location.coords;
+    const response = await axios.get(
+      `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&units=metric&appid=${API_KEY}`
+    );
+    setWeatherData(response.data);
+    setCity(response.data.name);
+  };
+
   useEffect(() => {
-    fetchWeather();
+    getLocation();
   }, []);
 
   useEffect(() => {
@@ -80,13 +110,26 @@ export default function WeatherApp() {
     outputRange: ['0deg', '360deg'],
   });
 
+  const handleSearch = () => {
+    if (city) {
+      fetchWeather(city);
+    }
+  };
+
+  const formatLocation = () => {
+    if (!weatherData) return '';
+    const { name, sys } = weatherData;
+    const { state, country } = sys;
+    return `${name}, ${state ? state : ''} - ${country}`;
+  };
+
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.header, { opacity }]}>
         <Text style={styles.title}>Previsão do Tempo</Text>
         <Animated.Image
           source={{
-            uri: `http://openweathermap.org/img/wn/${weatherData ? weatherData.weather[0].icon : '01d'}@4x.png`, // GET aqui onde pega o ícone da API
+            uri: `http://openweathermap.org/img/wn/${weatherData ? weatherData.weather[0].icon : '01d'}@4x.png`, // Obtendo ícone da API
           }}
           style={[styles.icon, { transform: [{ rotate: rotationInterpolation }] }]}
         />
@@ -97,22 +140,22 @@ export default function WeatherApp() {
         value={city}
         onChangeText={(text) => setCity(text)}
       />
-      <TouchableOpacity style={styles.button} onPress={fetchWeather}>
+      <TouchableOpacity style={styles.button} onPress={handleSearch}>
         <Text style={styles.buttonText}>Buscar</Text>
       </TouchableOpacity>
       {loading ? (
-        <ActivityIndicator size="large" color="#000" style={styles.loader} />
+        <ActivityIndicator size="large" color="#4A9107" style={styles.loader} />
       ) : error ? (
         <Text style={styles.error}>{error}</Text>
       ) : (
         weatherData && (
           <View style={styles.weatherContainer}>
-            <Text style={styles.city}>{weatherData.name}</Text>
+            <Text style={styles.city}>{formatLocation()}</Text>
             <Text style={styles.temp}>{Math.round(weatherData.main.temp)}°C</Text>
             <Text style={styles.desc}>{weatherData.weather[0].description}</Text>
             <Image
               source={{
-                uri: `http://openweathermap.org/img/wn/${weatherData.weather[0].icon}@4x.png`, // POST aqui onde mostra o icone da api
+                uri: `http://openweathermap.org/img/wn/${weatherData.weather[0].icon}@4x.png`, // Exibindo ícone da API
               }}
               style={styles.weatherIcon}
             />
@@ -127,7 +170,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#87CEEB',
+    backgroundColor: '#140E50',
     justifyContent: 'center',
   },
   header: {
@@ -152,7 +195,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   button: {
-    backgroundColor: '#4682B4',
+    backgroundColor: '#150791',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -166,9 +209,12 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   error: {
-    color: '#ff4d4d',
+    backgroundColor: '#F9000022',
+    borderRadius: 8,
+    color: '#FF0000',
     textAlign: 'center',
     marginTop: 20,
+    fontWeight: 'bold',
   },
   weatherContainer: {
     marginTop: 20,

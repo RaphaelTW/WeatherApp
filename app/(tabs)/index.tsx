@@ -35,7 +35,7 @@ export default function WeatherApp() {
   const [error, setError] = useState('');
   const [location, setLocation] = useState<{ lat: number; lon: number } | null>(null);
 
-  const API_KEY = '19251108c5a572222b8e4be1c0faf773';
+  const API_KEY = 'COLOCAR SUA CHAVE KEY AQUI!';
 
   const fetchWeather = async (lat: number, lon: number) => {
     setLoading(true);
@@ -246,8 +246,6 @@ const styles = StyleSheet.create({
   dailyCard: {
     backgroundColor: '#150791',
     padding: 15,
-   
-
     borderRadius: 8,
     marginBottom: 10,
   },

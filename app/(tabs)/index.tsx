@@ -34,6 +34,8 @@ export default function WeatherApp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [location, setLocation] = useState<{ lat: number; lon: number } | null>(null);
+  const [uvIndex, setUvIndex] = useState<number | null>(null);
+  const [airQuality, setAirQuality] = useState<string | null>(null);
 
   const API_KEY = 'COLOCAR SUA CHAVE KEY AQUI!';
 
@@ -80,10 +82,36 @@ export default function WeatherApp() {
         }));
 
       setForecast(forecastList);
+
+      await Promise.all([fetchUVIndex(lat, lon), fetchAirQuality(lat, lon)]);
     } catch (err: any) {
       setError('Erro ao buscar dados do clima.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUVIndex = async (lat: number, lon: number) => {
+    try {
+      const response = await axios.get(
+        `https://api.openweathermap.org/data/2.5/uvi?lat=${lat}&lon=${lon}&appid=${API_KEY}`
+      );
+      setUvIndex(response.data.value);
+    } catch {
+      setError('Erro ao buscar Índice UV.');
+    }
+  };
+
+  const fetchAirQuality = async (lat: number, lon: number) => {
+    try {
+      const response = await axios.get(
+        `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${API_KEY}`
+      );
+      const aqi = response.data.list[0].main.aqi;
+      const aqiLevels = ['Boa', 'Moderada', 'Ruim', 'Muito Ruim', 'Perigosa'];
+      setAirQuality(aqiLevels[aqi - 1]);
+    } catch {
+      setError('Erro ao buscar qualidade do ar.');
     }
   };
 
@@ -158,6 +186,12 @@ export default function WeatherApp() {
                 }}
                 style={styles.icon}
               />
+              {uvIndex !== null && (
+                <Text style={styles.info}>Índice UV: {uvIndex}</Text>
+              )}
+              {airQuality && (
+                <Text style={styles.info}>Qualidade do Ar: {airQuality}</Text>
+              )}
             </View>
 
             <Text style={styles.sectionTitle}>Previsão para os próximos dias</Text>

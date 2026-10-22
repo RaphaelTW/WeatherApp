@@ -1,0 +1,15 @@
+WEATHERAPP 2.0
+
+1. Extraia o arquivo ZIP.
+2. Abra a pasta WeatherApp no VS Code ou terminal.
+3. Execute: npm install
+4. Execute: npx expo start -c
+5. Abra no Android, iOS (ambiente compatível) ou Web.
+
+ATENÇÃO:
+- O projeto usa Expo SDK 57. Use uma versão compatível do Expo Go.
+- Internet é necessária para carregar previsões reais da Open-Meteo.
+- Para gerar um APK: npx eas-cli build --platform android --profile apk
+- Os lembretes de notificações são locais; alertas meteorológicos automáticos em segundo plano não estão implementados.
+- O repositório contém o código-fonte; o APK será disponibilizado na release após o build.
+- Veja README.md para recursos, arquitetura, limitações e testes.

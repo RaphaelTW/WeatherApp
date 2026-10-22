@@ -1,199 +1,36 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, ScrollView, View, ActivityIndicator } from 'react-native';
-import * as Location from 'expo-location';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import Animated, { Easing, FadeIn, SlideInLeft } from 'react-native-reanimated'; // Usando animações do reanimated
-
-interface WeatherData {
-  current: {
-    temp: number;
-    humidity: number;
-    weather: { description: string }[];
-  };
-  daily: {
-    temp: { min: number; max: number };
-    weather: { description: string }[];
-    sunrise: number;
-    sunset: number;
-    moonrise: number;
-    moonset: number;
-  }[];
+import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { palette } from '@/constants/theme';
+import FoxMascot from '@/components/fox/FoxMascot';
+import { ActionButton, Panel, SectionHeading } from '@/components/weather/UI';
+import { useWeather } from '@/context/WeatherContext';
+import WeatherIcon from '@/components/weather/WeatherIcon';
+import { labelOf } from '@/services/weather';
+export default function Explore(){
+ const [query,setQuery]=useState('');const {weather,busy,error,searchCity,useLocation,prefs,toggleFavorite}=useWeather();
+ const choose=async(city:string)=>{Keyboard.dismiss();const result=await searchCity(city);if(result){setQuery('');router.replace('/(tabs)');}};
+ const locate=async()=>{Keyboard.dismiss();if(await useLocation())router.replace('/(tabs)');};
+ return <SafeAreaView style={styles.root} edges={['top']}><StatusBar style="dark"/><ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+  <Text style={styles.eyebrow}>DESCUBRA O MUNDO</Text><Text style={styles.title}>Qual céu vamos explorar? 🌎</Text><Text style={styles.sub}>Encontre a previsão de qualquer cidade e salve seus lugares favoritos.</Text>
+  <View style={styles.searchBox}><Ionicons name="search" color={palette.purple} size={22}/><TextInput style={styles.input} placeholder="Buscar cidade, ex.: Curitiba" placeholderTextColor="#AAA4B8" value={query} onChangeText={setQuery} onSubmitEditing={()=>void choose(query)} returnKeyType="search" autoCapitalize="words" autoCorrect={false}/>{query.length>0&&<Pressable onPress={()=>setQuery('')}><Ionicons name="close-circle" size={20} color={palette.muted}/></Pressable>}</View>
+  <ActionButton title="Buscar previsão" busy={busy} icon="search" onPress={()=>void choose(query)} disabled={!query.trim()}/>
+  <Pressable onPress={()=>void locate()} style={styles.locationButton}><Ionicons name="locate" color={palette.purple} size={20}/><Text style={styles.locationText}>Usar minha localização atual</Text><Ionicons name="arrow-forward" color={palette.purple} size={18}/></Pressable>
+  {error&&<View style={styles.error}><Ionicons name="alert-circle-outline" color="#B63A58" size={20}/><Text style={styles.errorText}>{error}</Text></View>}
+  {busy&&<ActivityIndicator color={palette.purple} style={{marginTop:16}}/>}
+  <Panel style={{marginTop:21}}><SectionHeading title="LUGARES FAVORITOS" icon="heart-outline"/>
+   {prefs.favoriteCities.length===0?<Text style={styles.empty}>Toque no coração de uma cidade para adicioná-la.</Text>:prefs.favoriteCities.map(city=><View key={city} style={styles.favoriteRow}>
+    <Pressable onPress={()=>void choose(city)} style={{flexDirection:'row',flex:1,alignItems:'center',gap:10}}><Ionicons name="location-outline" color={palette.purple} size={22}/><Text style={styles.favoriteCity}>{city}</Text></Pressable>
+    <Pressable onPress={()=>toggleFavorite(city)} accessibilityLabel={`Remover ${city} dos favoritos`}><Ionicons name="heart" color={palette.danger} size={22}/></Pressable>
+   </View>)}
+  </Panel>
+  {weather&&<Panel><SectionHeading title="CIDADE SELECIONADA" icon="navigate-circle-outline"/><View style={styles.selectedWeather}><WeatherIcon code={weather.current.code} size={44}/><View style={{flex:1}}><Text style={styles.favoriteCity}>{weather.city}</Text><Text style={styles.selectedDesc}>{labelOf(weather.current.code)}</Text></View><Text style={styles.selectedTemp}>{Math.round(weather.current.temp)}°</Text></View>
+   <View style={{marginTop:14}}><ActionButton title={prefs.favoriteCities.includes(weather.city)?'Remover dos favoritos':'Salvar cidade'} icon={prefs.favoriteCities.includes(weather.city)?'heart':'heart-outline'} onPress={()=>toggleFavorite(weather.city)} secondary/></View>
+  </Panel>}
+  <View style={styles.endCard}><View style={{flex:1}}><Text style={styles.endTitle}>A Fifi é sua guia!</Text><Text style={styles.endSub}>Da praia à montanha, sempre uma previsão ao seu lado.</Text></View><FoxMascot size={135}/></View>
+ </ScrollView></SafeAreaView>
 }
-
-const API_KEY = 'fb5dabe48ffbfd75aaf5e01cc720e335';
-const BASE_URL = 'https://api.openweathermap.org/data/2.5';
-
-export default function TabTwoScreen() {
-  const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [latitude, setLatitude] = useState<number | null>(null);
-  const [longitude, setLongitude] = useState<number | null>(null);
-
-  useEffect(() => {
-    const getLocation = async () => {
-      try {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.error('Permissão para acessar localização negada');
-          return;
-        }
-
-        const location = await Location.getCurrentPositionAsync({});
-        setLatitude(location.coords.latitude);
-        setLongitude(location.coords.longitude);
-      } catch (error) {
-        console.error('Erro ao obter a localização:', error);
-      }
-    };
-
-    getLocation();
-  }, []);
-
-  useEffect(() => {
-    if (latitude !== null && longitude !== null) {
-      const fetchWeather = async () => {
-        try {
-          setLoading(true);
-          const response = await fetch(
-            `https://api.openweathermap.org/data/2.5/weather?q=London&units=metric&appid=fb5dabe48ffbfd75aaf5e01cc720e335`
-          );
-
-          const data = await response.json();
-          console.log('Dados recebidos:', data);
-
-          if (data && data.main) {
-            setWeatherData({
-              current: {
-                temp: data.main.temp,
-                humidity: data.main.humidity,
-                weather: data.weather,
-              },
-              daily: [],
-            });
-          } else {
-            console.error('Dados climáticos inválidos');
-          }
-        } catch (error) {
-          console.error('Erro ao buscar dados climáticos:', error);
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchWeather();
-    }
-  }, [latitude, longitude]);
-
-  const fetchWeather = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(
-        `${BASE_URL}/onecall?lat=${latitude}&lon=${longitude}&exclude=minutely,hourly,alerts&units=metric&appid=${API_KEY}`
-      );
-
-      const data = await response.json();
-      console.log('Dados recebidos:', data);
-
-      if (data && data.daily) {
-        setWeatherData(data);
-      } else {
-        console.error('Dados climáticos inválidos');
-      }
-    } catch (error) {
-      console.error('Erro ao buscar dados climáticos:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#150791" />
-        <ThemedText>Carregando dados climáticos...</ThemedText>
-      </ThemedView>
-    );
-  }
-
-  if (!weatherData || !weatherData.daily) {
-    return (
-      <ThemedView style={styles.loadingContainer}>
-        <ThemedText>Erro ao carregar dados climáticos</ThemedText>
-      </ThemedView>
-    );
-  }
-
-  const dailyData = weatherData.daily.slice(1, 7); // Próximos 6 dias
-
-  return (
-    <ScrollView style={styles.container}>
-      <Animated.View
-        style={styles.titleContainer}
-        entering={FadeIn} // Usando FadeIn para animação de entrada
-      >
-        <ThemedText type="title">Explore</ThemedText>
-      </Animated.View>
-
-      <Animated.View entering={SlideInLeft} style={styles.subtitleContainer}>
-        <ThemedText style={styles.subtitle}>
-          Temperatura Atual: {Math.round(weatherData.current.temp)}°C
-        </ThemedText>
-        <ThemedText style={styles.subtitle}>
-          Umidade: {weatherData.current.humidity}%
-        </ThemedText>
-        <ThemedText style={styles.subtitle}>
-          Condição: {weatherData.current.weather[0].description}
-        </ThemedText>
-      </Animated.View>
-
-      <Animated.View style={styles.forecastContainer}>
-        {dailyData.map((day, index) => (
-          <Animated.View
-            key={index}
-            style={styles.forecastItem}
-            entering={SlideInLeft} // Animação de entrada para cada item
-          >
-            <ThemedText>
-              Dia {index + 1}: Min {Math.round(day.temp.min)}°C, Max{' '}
-              {Math.round(day.temp.max)}°C, {day.weather[0].description}
-            </ThemedText>
-          </Animated.View>
-        ))}
-      </Animated.View>
-    </ScrollView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: '#140E50',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#140E50',
-  },
-  titleContainer: {
-    marginBottom: 16,
-  },
-  subtitleContainer: {
-    marginBottom: 16,
-  },
-  subtitle: {
-    marginBottom: 8,
-    color: '#fff',
-  },
-  forecastContainer: {
-    marginVertical: 16,
-  },
-  forecastItem: {
-    marginBottom: 8,
-    backgroundColor: '#150791',
-    padding: 12,
-    borderRadius: 8,
-  },
-});
+const styles=StyleSheet.create({root:{flex:1,backgroundColor:'#F5F2FF'},content:{padding:19,paddingTop:31,paddingBottom:45},eyebrow:{fontWeight:'900',letterSpacing:1.6,color:palette.purple,fontSize:11},title:{fontSize:33,fontWeight:'900',lineHeight:39,color:palette.ink,marginTop:12},sub:{fontSize:15,color:'#817C98',lineHeight:23,marginTop:11,marginBottom:24},searchBox:{height:58,backgroundColor:'white',borderRadius:18,paddingHorizontal:17,flexDirection:'row',alignItems:'center',gap:10,borderWidth:1,borderColor:'#EBE6FF',marginBottom:12},input:{flex:1,fontSize:15,color:palette.ink,height:'100%'},locationButton:{height:55,flexDirection:'row',gap:10,alignItems:'center',justifyContent:'center',marginTop:12},locationText:{fontSize:14,color:palette.purple,fontWeight:'800'},error:{backgroundColor:'#FFECF0',padding:15,borderRadius:14,flexDirection:'row',alignItems:'center',gap:7,marginTop:10},errorText:{color:'#B63A58',fontSize:13,flex:1},favoriteRow:{flexDirection:'row',paddingVertical:14,borderTopWidth:1,borderTopColor:'#F1EEF8',alignItems:'center'},favoriteCity:{fontSize:16,fontWeight:'800',color:palette.ink},selectedWeather:{flexDirection:'row',alignItems:'center',gap:12},selectedDesc:{fontSize:12,color:palette.muted,marginTop:3},selectedTemp:{fontSize:34,fontWeight:'900',color:palette.ink},empty:{fontSize:13,color:palette.muted},endCard:{backgroundColor:'#E5E0FF',borderRadius:23,paddingLeft:18,flexDirection:'row',alignItems:'center'},endTitle:{fontSize:17,fontWeight:'900',color:palette.ink},endSub:{fontSize:12,color:'#716C90',lineHeight:19,marginTop:6}});

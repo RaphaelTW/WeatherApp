@@ -14,12 +14,12 @@ import { activateDailyReminder } from '@/services/notifications';
 const STEPS=7;
 export default function Onboarding(){
  const [step,setStep]=useState(0);const [working,setWorking]=useState(false);
- const {prefs,updatePrefs,useLocation,error}=useWeather();
+ const {prefs,updatePrefs,useLocation,error,weather}=useWeather();
  const finish=()=>{updatePrefs({completedOnboarding:true});router.replace('/(tabs)');};
  const next=()=>{if(step>=STEPS-1)finish();else setStep(x=>x+1)};
  const toggle=(kind:'activities'|'alerts',value:string)=>{const items=prefs[kind];updatePrefs({[kind]:items.includes(value)?items.filter(x=>x!==value):[...items,value]});};
  const requestLocation=async()=>{setWorking(true);await useLocation();setWorking(false);next()};
- const requestNotifications=async()=>{setWorking(true);const enabled=await activateDailyReminder();updatePrefs({notificationsEnabled:enabled});setWorking(false);finish()};
+ const requestNotifications=async()=>{setWorking(true);const enabled=await activateDailyReminder(weather);updatePrefs({notificationsEnabled:enabled});setWorking(false);finish()};
  const headline=['Seu clima, sua vibe.','Dicas que cuidam de você.','Como a raposa pode ajudar?','O que você ama fazer?','Quais alertas importam?','Previsão do seu cantinho.','Uma ajudinha pela manhã.'][step];
  const subtitle=[
   'Uma previsão inteligente, dicas úteis e uma raposinha para deixar seus dias mais leves.',
@@ -28,7 +28,7 @@ export default function Onboarding(){
   'Vamos personalizar as recomendações para seus planos favoritos.',
   'Escolha os fenômenos que quer acompanhar no seu painel de alertas.',
   'Você escolhe: usar seu GPS ou buscar qualquer cidade manualmente.',
-  'Receba um lembrete diário para conferir a previsão atualizada.',
+  'Receba às 7h um resumo com calor, frio, chuva e mudanças previstas para o dia.',
  ][step];
  const canContinue=(step!==3||prefs.activities.length>0)&&(step!==4||prefs.alerts.length>0);
  return <SafeAreaView style={styles.root} edges={['top','bottom']}>
@@ -60,7 +60,7 @@ export default function Onboarding(){
     </Pressable>
    })}</View>}
    {step===5&&<View style={styles.permissionCard}><View style={styles.permissionCircle}><Ionicons name="location" color={palette.purple} size={80}/></View><Text style={styles.permissionTitle}>Onde está fazendo sol?</Text><Text style={styles.permissionDesc}>Com sua autorização, vamos consultar o clima local. Suas coordenadas são enviadas ao serviço meteorológico, sem servidor próprio do app.</Text><View style={styles.foxSide}><FoxMascot size={145}/></View></View>}
-   {step===6&&<View style={styles.permissionCard}><View style={styles.permissionCircle}><Ionicons name="notifications" color={palette.purple} size={77}/></View><View style={styles.notificationDemo}><Text style={{fontSize:22}}>🦊</Text><View style={{flex:1}}><Text style={styles.notificationTitle}>WeatherApp</Text><Text style={styles.notificationText}>Bom dia! Confira como está o tempo hoje.</Text></View><Text style={{color:palette.muted,fontSize:11}}>7:00</Text></View><View style={styles.foxSide}><FoxMascot size={143}/></View></View>}
+   {step===6&&<View style={styles.permissionCard}><View style={styles.permissionCircle}><Ionicons name="notifications" color={palette.purple} size={77}/></View><View style={styles.notificationDemo}><Text style={{fontSize:22}}>🦊</Text><View style={{flex:1}}><Text style={styles.notificationTitle}>WeatherApp · São Paulo</Text><Text style={styles.notificationText}>Hoje fará calor. Leve um guarda-chuva para os picos de chuva à tarde.</Text></View><Text style={{color:palette.muted,fontSize:11}}>7:00</Text></View><View style={styles.foxSide}><FoxMascot size={143}/></View></View>}
   </ScrollView>
   <View style={styles.footer}>
    {step===5?<ActionButton title={working?'Buscando localização...':'Usar minha localização'} busy={working} icon="navigate" onPress={requestLocation}/>:

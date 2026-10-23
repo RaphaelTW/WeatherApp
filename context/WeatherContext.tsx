@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { getWeather, geocodeCity } from '@/services/weather';
+import { refreshDailyReminders } from '@/services/notifications';
 import { initialPrefs, UserPrefs, WeatherBundle } from '@/types/weather';
 
 const PREF_KEY='weatherapp.preferences.v2';
@@ -30,6 +31,7 @@ export function WeatherProvider({children}:{children:React.ReactNode}){
  }).catch(()=>{}).finally(()=>{if(active)setReady(true)});return()=>{active=false};},[]);
  const updatePrefs=useCallback((changes:Partial<UserPrefs>)=>{setPrefs(p=>({...p,...changes}));},[]);
  useEffect(()=>{if(ready)AsyncStorage.setItem(PREF_KEY,JSON.stringify(prefs)).catch(()=>{});},[prefs,ready]);
+ useEffect(()=>{if(ready&&prefs.notificationsEnabled&&weather)void refreshDailyReminders(weather);},[prefs.notificationsEnabled,ready,weather]);
  const load=useCallback(async(location:typeof selection)=>{
    setBusy(true);setError(null);
    try{const data=await getWeather(location.latitude,location.longitude,location.city,location.country);setWeather(data);setSelection(location);AsyncStorage.setItem(WEATHER_CACHE_KEY,JSON.stringify(data)).catch(()=>{});}catch(e){setError(e instanceof Error?e.message:'Não foi possível consultar a previsão. Confira sua conexão.');}
